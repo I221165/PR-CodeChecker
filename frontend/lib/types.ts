@@ -4,15 +4,18 @@ export type Severity = "critical" | "warning" | "suggestion";
 export type ReviewerKind = "security" | "performance" | "style" | "tests" | "maintainability";
 export type ReviewStatus = "queued" | "running" | "done" | "failed";
 export type ReviewTrigger = "manual" | "webhook" | "scheduled";
+export type Convention = "praise" | "nit" | "suggestion" | "issue" | "question" | "thought" | "chore";
 
 export interface ReviewComment {
   file: string;
   line_start: number;
   line_end: number;
   severity: Severity;
+  convention: Convention;
   title: string;
   body: string;
   suggested_fix: string | null;
+  origin_reviewers: ReviewerKind[] | null;
 }
 
 export interface ReviewerOutput {
@@ -25,6 +28,8 @@ export interface ReviewReport {
   pr_url: string;
   pr_title: string;
   reviewers: ReviewerOutput[];
+  consolidated: ReviewComment[] | null;   // deduped & conventional-prefixed (preferred for display)
+  overall_summary: string | null;
 }
 
 export interface ReviewRow {

@@ -4,6 +4,8 @@ from pydantic import BaseModel
 
 Severity = Literal["critical", "warning", "suggestion"]
 ReviewerKind = Literal["security", "performance", "style", "tests", "maintainability"]
+# Conventional Comments (https://conventionalcomments.org) — sets reader expectations
+Convention = Literal["praise", "nit", "suggestion", "issue", "question", "thought", "chore"]
 
 
 class ReviewComment(BaseModel):
@@ -11,9 +13,11 @@ class ReviewComment(BaseModel):
     line_start: int                 # 1-indexed; 0 means file-level (no specific line)
     line_end: int                   # inclusive
     severity: Severity
+    convention: Convention = "issue"   # Conventional Comments prefix
     title: str                      # one-line headline
     body: str                       # 1-3 sentence explanation
     suggested_fix: str | None = None  # short code snippet or "what to change"
+    origin_reviewers: list[ReviewerKind] | None = None  # which agent(s) flagged this (filled by consolidator)
 
 
 class ReviewerOutput(BaseModel):
@@ -47,13 +51,18 @@ class PullRequestMeta(BaseModel):
 
 
 class ReviewReport(BaseModel):
-    """Aggregated final output from all 5 reviewers."""
+    """Aggregated final output from all 5 reviewers, optionally consolidated by the 6th agent."""
     pr_url: str
     pr_title: str
-    reviewers: list[ReviewerOutput]
+    reviewers: list[ReviewerOutput]                    # raw outputs from the 5 parallel reviewers
+    consolidated: list[ReviewComment] | None = None    # deduped, conventional-prefixed final list (preferred for display)
+    overall_summary: str | None = None                 # 2-3 sentence verdict across the whole PR (from consolidator)
 
     @property
     def all_comments(self) -> list[ReviewComment]:
+        """Final comments preferred for display: consolidated if present, else union of all reviewers."""
+        if self.consolidated is not None:
+            return self.consolidated
         return [c for r in self.reviewers for c in r.comments]
 
     @property

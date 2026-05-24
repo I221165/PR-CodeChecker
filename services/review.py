@@ -12,6 +12,7 @@ from typing import Awaitable, Callable
 from crewai import Crew, Process, Task
 
 from services.agents import REVIEWERS
+from services.consolidator import consolidate
 from services.github import fetch_pr, format_pr_for_reviewer
 from services.models import (
     PullRequestMeta,
@@ -121,10 +122,27 @@ async def run_review_async(
     coros: list[Awaitable[ReviewerOutput]] = [wrapped(i, k) for i, k in enumerate(reviewers)]
     outputs = await asyncio.gather(*coros)
 
+    # Step 2: consolidator agent — runs sequentially after the 5 are done
+    consolidated_comments = None
+    overall_summary = None
+    if on_progress:
+        on_progress("__consolidator__", "started")
+    try:
+        cons = await consolidate(list(outputs))
+        consolidated_comments = cons.findings
+        overall_summary = cons.overall_summary
+    except Exception as e:
+        # Consolidator failure isn't fatal — fall back to showing the raw 5-reviewer outputs
+        overall_summary = f"(consolidator failed: {type(e).__name__}: {e})"
+    if on_progress:
+        on_progress("__consolidator__", "done")
+
     return ReviewReport(
         pr_url=pr.url,
         pr_title=pr.title,
         reviewers=list(outputs),
+        consolidated=consolidated_comments,
+        overall_summary=overall_summary,
     )
 
 

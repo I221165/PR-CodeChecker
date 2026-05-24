@@ -38,44 +38,100 @@ REVIEWER_GLYPH = {
     "tests": "🧪",
     "maintainability": "🛠️",
 }
+CONVENTION_GLYPH = {
+    "praise": "🎉",
+    "issue": "❗",
+    "suggestion": "💡",
+    "nit": "🔹",
+    "question": "❓",
+    "thought": "💭",
+    "chore": "🧹",
+}
 
 
 def render_markdown(report: ReviewReport) -> str:
-    """Render the report as a GitHub-flavored markdown comment."""
+    """Render the report as a GitHub-flavored markdown comment.
+
+    Prefers consolidated findings (deduped, conventional-prefixed) when available.
+    Falls back to the raw per-reviewer view if the consolidator didn't run.
+    """
     lines = [
         "## 🤖 Code Review Crew",
-        f"_Reviewed by 5 specialised AI agents (security, performance, style, tests, maintainability)._",
-        "",
-        f"**{len(report.all_comments)} findings** "
-        f"· {report.critical_count} critical "
-        f"· {sum(1 for c in report.all_comments if c.severity == 'warning')} warnings "
-        f"· {sum(1 for c in report.all_comments if c.severity == 'suggestion')} suggestions",
+        "_5 specialist agents + 1 consolidator. Comments follow [Conventional Comments](https://conventionalcomments.org)._",
         "",
     ]
-    for r in report.reviewers:
-        glyph = REVIEWER_GLYPH.get(r.reviewer, "•")
-        lines.append(f"\n<details><summary>{glyph} <b>{r.reviewer.title()}</b> — {len(r.comments)} finding(s)</summary>\n")
-        lines.append(f"\n_{r.overall_assessment}_\n")
-        if not r.comments:
-            lines.append("\n_No issues flagged._")
-        else:
-            for c in r.comments:
-                sev = SEVERITY_GLYPH.get(c.severity, "•")
-                loc = (
-                    f"`{c.file}`"
-                    if c.line_start == 0
-                    else f"`{c.file}:{c.line_start}`" + (f"-{c.line_end}" if c.line_end != c.line_start else "")
-                )
-                lines.append(f"\n#### {sev} {c.title}")
-                lines.append(f"_{c.severity}_ · {loc}")
-                lines.append("")
-                lines.append(c.body)
-                if c.suggested_fix:
-                    lines.append("\n**Suggested fix:**")
-                    lines.append(f"```\n{c.suggested_fix}\n```")
+
+    if report.overall_summary:
+        lines.extend([f"> {report.overall_summary}", ""])
+
+    if report.consolidated is not None:
+        # Preferred view — use the consolidator's deduped, prefixed output
+        lines.append(
+            f"**{len(report.all_comments)} findings** "
+            f"· {report.critical_count} critical "
+            f"· {sum(1 for c in report.all_comments if c.severity == 'warning')} warnings "
+            f"· {sum(1 for c in report.all_comments if c.severity == 'suggestion')} suggestions"
+        )
+        lines.append("")
+        for c in report.all_comments:
+            conv_glyph = CONVENTION_GLYPH.get(c.convention, "•")
+            sev = SEVERITY_GLYPH.get(c.severity, "•")
+            loc = (
+                f"`{c.file}`"
+                if c.line_start == 0
+                else f"`{c.file}:{c.line_start}`" + (f"-{c.line_end}" if c.line_end != c.line_start else "")
+            )
+            origin = ""
+            if c.origin_reviewers and len(c.origin_reviewers) > 0:
+                origin = f"  _(flagged by: {', '.join(c.origin_reviewers)})_"
+            lines.append(f"\n#### {conv_glyph} **{c.convention}:** {c.title}  {sev}")
+            lines.append(f"_{c.severity}_ · {loc}{origin}")
+            lines.append("")
+            lines.append(c.body)
+            if c.suggested_fix:
+                lines.append("\n**Suggested fix:**")
+                lines.append(f"```\n{c.suggested_fix}\n```")
+
+        # Tuck the raw per-reviewer view at the bottom for transparency
+        lines.append("\n---\n<details><summary>Raw per-reviewer assessments</summary>\n")
+        for r in report.reviewers:
+            glyph = REVIEWER_GLYPH.get(r.reviewer, "•")
+            lines.append(f"\n**{glyph} {r.reviewer.title()}** — {len(r.comments)} raw finding(s)")
+            lines.append(f"\n_{r.overall_assessment}_")
         lines.append("\n</details>")
+    else:
+        # Fallback — consolidator didn't run, show the old reviewer-by-reviewer view
+        lines.append(
+            f"**{len(report.all_comments)} findings (un-consolidated)** "
+            f"· {report.critical_count} critical "
+            f"· {sum(1 for c in report.all_comments if c.severity == 'warning')} warnings "
+            f"· {sum(1 for c in report.all_comments if c.severity == 'suggestion')} suggestions"
+        )
+        for r in report.reviewers:
+            glyph = REVIEWER_GLYPH.get(r.reviewer, "•")
+            lines.append(f"\n<details><summary>{glyph} <b>{r.reviewer.title()}</b> — {len(r.comments)} finding(s)</summary>\n")
+            lines.append(f"\n_{r.overall_assessment}_\n")
+            if not r.comments:
+                lines.append("\n_No issues flagged._")
+            else:
+                for c in r.comments:
+                    sev = SEVERITY_GLYPH.get(c.severity, "•")
+                    loc = (
+                        f"`{c.file}`"
+                        if c.line_start == 0
+                        else f"`{c.file}:{c.line_start}`" + (f"-{c.line_end}" if c.line_end != c.line_start else "")
+                    )
+                    lines.append(f"\n#### {sev} {c.title}")
+                    lines.append(f"_{c.severity}_ · {loc}")
+                    lines.append("")
+                    lines.append(c.body)
+                    if c.suggested_fix:
+                        lines.append("\n**Suggested fix:**")
+                        lines.append(f"```\n{c.suggested_fix}\n```")
+            lines.append("\n</details>")
+
     lines.append("\n---")
-    lines.append("_Powered by [Code Review Crew](https://github.com/) · CrewAI + Groq Llama 3.3_")
+    lines.append("_Powered by [Code Review Crew](https://github.com/I221165/PR-CodeChecker) · CrewAI + Groq Llama 3.3_")
     return "\n".join(lines)
 
 
@@ -132,8 +188,9 @@ def _build_inline_comment(c: ReviewComment, commentable_by_file: dict[str, set[i
     if not valid or c.line_start not in valid:
         return None
 
+    conv_prefix = f"**{c.convention}:** " if c.convention else ""
     body_parts = [
-        f"**{SEVERITY_GLYPH.get(c.severity, '•')} {c.title}**  _({c.severity})_",
+        f"{CONVENTION_GLYPH.get(c.convention, '•')} {conv_prefix}**{c.title}**  _({c.severity})_",
         "",
         c.body,
     ]

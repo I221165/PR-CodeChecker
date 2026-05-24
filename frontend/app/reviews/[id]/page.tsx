@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import type { ReviewDetail } from "@/lib/types";
-import { REVIEWER_GLYPH, SeverityBadge, StatusBadge, TriggerBadge } from "@/app/components/badges";
+import { ConventionBadge, REVIEWER_GLYPH, SeverityBadge, StatusBadge, TriggerBadge } from "@/app/components/badges";
 
 export default function ReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -36,11 +36,13 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
   if (!review) return <p className="text-sm text-neutral-500">Loading...</p>;
 
   const r = review.report;
+  // Prefer consolidated view; fall back to flattened reviewer comments
+  const finalComments = r?.consolidated ?? (r ? r.reviewers.flatMap((x) => x.comments) : []);
   const counts = r ? {
-    total: r.reviewers.reduce((n, x) => n + x.comments.length, 0),
-    critical: r.reviewers.reduce((n, x) => n + x.comments.filter((c) => c.severity === "critical").length, 0),
-    warning: r.reviewers.reduce((n, x) => n + x.comments.filter((c) => c.severity === "warning").length, 0),
-    suggestion: r.reviewers.reduce((n, x) => n + x.comments.filter((c) => c.severity === "suggestion").length, 0),
+    total: finalComments.length,
+    critical: finalComments.filter((c) => c.severity === "critical").length,
+    warning: finalComments.filter((c) => c.severity === "warning").length,
+    suggestion: finalComments.filter((c) => c.severity === "suggestion").length,
   } : null;
 
   return (
@@ -90,6 +92,13 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
+      {r?.overall_summary && (
+        <section className="rounded-lg border border-neutral-200 bg-white p-5">
+          <h2 className="text-sm font-medium text-neutral-700 mb-2">Overall verdict</h2>
+          <p className="text-sm text-neutral-800 italic">{r.overall_summary}</p>
+        </section>
+      )}
+
       {counts && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Stat label="Total findings" value={counts.total} />
@@ -99,44 +108,63 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {r?.reviewers.map((rv) => (
-        <section key={rv.reviewer} className="rounded-lg border border-neutral-200 bg-white p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium flex items-center gap-2">
-              <span>{REVIEWER_GLYPH[rv.reviewer]}</span>
-              <span className="capitalize">{rv.reviewer}</span>
-            </h2>
-            <span className="text-xs text-neutral-500">{rv.comments.length} finding{rv.comments.length === 1 ? "" : "s"}</span>
-          </div>
-          <p className="text-sm italic text-neutral-700">{rv.overall_assessment}</p>
-          {rv.comments.length === 0 ? (
-            <p className="text-sm text-neutral-500">No issues flagged.</p>
-          ) : (
-            <ul className="space-y-3">
-              {rv.comments.map((c, i) => (
-                <li key={i} className="border-l-4 border-neutral-200 pl-4 py-1">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0 flex-1">
+      {/* Consolidated findings (preferred view) */}
+      {r?.consolidated && r.consolidated.length > 0 && (
+        <section className="rounded-lg border border-neutral-200 bg-white p-5 space-y-3">
+          <h2 className="text-sm font-medium text-neutral-700">Findings</h2>
+          <ul className="space-y-4">
+            {r.consolidated.map((c, i) => (
+              <li key={i} className="border-l-4 border-neutral-200 pl-4 py-1">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <ConventionBadge convention={c.convention} />
                       <p className="font-medium">{c.title}</p>
-                      <p className="text-xs text-neutral-500 mt-0.5">
-                        <code className="bg-neutral-100 px-1 py-0.5 rounded">{c.file}{c.line_start > 0 && `:${c.line_start}`}{c.line_end > c.line_start && `-${c.line_end}`}</code>
-                      </p>
                     </div>
-                    <SeverityBadge severity={c.severity} />
+                    <p className="text-xs text-neutral-500 mt-1 flex items-center gap-2 flex-wrap">
+                      <code className="bg-neutral-100 px-1 py-0.5 rounded">{c.file}{c.line_start > 0 && `:${c.line_start}`}{c.line_end > c.line_start && `-${c.line_end}`}</code>
+                      {c.origin_reviewers && c.origin_reviewers.length > 0 && (
+                        <span className="text-neutral-400">
+                          flagged by: {c.origin_reviewers.map((rk) => `${REVIEWER_GLYPH[rk]} ${rk}`).join(", ")}
+                        </span>
+                      )}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm text-neutral-700">{c.body}</p>
-                  {c.suggested_fix && (
-                    <details className="mt-2">
-                      <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-700">Suggested fix</summary>
-                      <pre className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-3 text-xs font-mono">{c.suggested_fix}</pre>
-                    </details>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                  <SeverityBadge severity={c.severity} />
+                </div>
+                <p className="mt-2 text-sm text-neutral-700">{c.body}</p>
+                {c.suggested_fix && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-700">Suggested fix</summary>
+                    <pre className="mt-2 whitespace-pre-wrap rounded bg-neutral-50 p-3 text-xs font-mono">{c.suggested_fix}</pre>
+                  </details>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
-      ))}
+      )}
+
+      {/* Raw per-reviewer assessments — collapsed by default */}
+      {r?.reviewers && (
+        <details className="rounded-lg border border-neutral-200 bg-white p-5">
+          <summary className="text-sm font-medium text-neutral-700 cursor-pointer hover:text-neutral-900">
+            Raw per-reviewer assessments (before consolidation)
+          </summary>
+          <div className="mt-4 space-y-4">
+            {r.reviewers.map((rv) => (
+              <div key={rv.reviewer} className="border-l-2 border-neutral-200 pl-3">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <span>{REVIEWER_GLYPH[rv.reviewer]}</span>
+                  <span className="capitalize">{rv.reviewer}</span>
+                  <span className="text-xs text-neutral-400">— {rv.comments.length} raw finding{rv.comments.length === 1 ? "" : "s"}</span>
+                </h3>
+                <p className="text-xs italic text-neutral-600 mt-1">{rv.overall_assessment}</p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

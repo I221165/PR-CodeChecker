@@ -1,4 +1,4 @@
-import type { ReviewStatus, ReviewTrigger, Severity, ReviewerKind } from "@/lib/types";
+import type { Convention, ReviewStatus, ReviewTrigger, Severity, ReviewerKind } from "@/lib/types";
 
 const STATUS_COLOR: Record<ReviewStatus, string> = {
   queued: "bg-neutral-100 text-neutral-700",
@@ -48,6 +48,35 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${SEVERITY_COLOR[severity]}`}>
       {severity}
+    </span>
+  );
+}
+
+const CONVENTION_COLOR: Record<Convention, string> = {
+  praise: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  issue: "bg-rose-50 text-rose-700 border-rose-200",
+  suggestion: "bg-sky-50 text-sky-700 border-sky-200",
+  nit: "bg-neutral-50 text-neutral-600 border-neutral-200",
+  question: "bg-violet-50 text-violet-700 border-violet-200",
+  thought: "bg-amber-50 text-amber-700 border-amber-200",
+  chore: "bg-neutral-50 text-neutral-600 border-neutral-200",
+};
+
+const CONVENTION_GLYPH: Record<Convention, string> = {
+  praise: "🎉",
+  issue: "❗",
+  suggestion: "💡",
+  nit: "🔹",
+  question: "❓",
+  thought: "💭",
+  chore: "🧹",
+};
+
+export function ConventionBadge({ convention }: { convention: Convention }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${CONVENTION_COLOR[convention]}`}>
+      <span>{CONVENTION_GLYPH[convention]}</span>
+      <span>{convention}</span>
     </span>
   );
 }
