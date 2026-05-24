@@ -1,0 +1,7 @@
+crewai==1.14.4
+python-dotenv==1.2.2
+requests
+fastapi
+uvicorn
+sqlmodel
+sse-starlette

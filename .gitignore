@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Cache + DB
+.cache/
+*.db
+generated/
+
+# Frontend
+node_modules/
+.next/
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
