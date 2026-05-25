@@ -123,13 +123,17 @@ async def run_review_async(
     outputs = await asyncio.gather(*coros)
 
     # Step 2: consolidator agent — runs sequentially after the 5 are done.
-    # Uses Llama 3.1 8B (separate TPM bucket from 70B), so even if reviewers ran
-    # back-to-back the consolidator won't compete for the 70B's quota.
+    # Uses Llama 3.1 8B (separate TPM bucket from 70B) AND waits 30s so the 70B
+    # bucket from the reviewers has time to clear. Belt-and-braces because CrewAI's
+    # internals occasionally still touch 70B even when we configure 8B.
     consolidated_comments = None
     overall_summary = None
     if on_progress:
         on_progress("__consolidator__", "started")
     try:
+        consolidator_wait = int(os.getenv("CONSOLIDATOR_COOLDOWN_SECONDS", "30"))
+        if consolidator_wait > 0:
+            await asyncio.sleep(consolidator_wait)
         cons = await consolidate(list(outputs))
         consolidated_comments = cons.findings
         overall_summary = cons.overall_summary
