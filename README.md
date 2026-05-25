@@ -10,11 +10,11 @@ Multi-agent code review system. Paste a GitHub PR URL, get a structured review b
 | 🧪 Tests | coverage of new code, edge cases, test quality |
 | 🛠️ Maintainability | complexity, modularity, naming, SOLID violations |
 
-Each reviewer outputs structured comments (file, line range, severity, suggested fix) which are merged into a single report.
+Each reviewer outputs structured comments (file, line range, severity, suggested fix). A **6th consolidator agent** then runs sequentially over their outputs: it dedupes overlapping findings (e.g. when style and maintainability both flag the same naming issue), drops noise, and formats every comment in [Conventional Comments](https://conventionalcomments.org) style (`praise:`, `issue:`, `nit:`, `suggestion:`, `question:`, `thought:`, `chore:`) so the reader knows at a glance whether a comment is blocking or optional.
 
 ## Why CrewAI for this?
 
-Five **independent** agents (asyncio + crew.kickoff_async) — each reviewer runs against the same diff and produces its own ReviewerOutput. Aggregation happens after all return.
+Five **independent** agents (asyncio + crew.kickoff_async) — each reviewer runs against the same diff and produces its own ReviewerOutput. Aggregation happens after all return, then the consolidator merges them into the final review.
 
 Concurrency is configurable. On **Groq free tier (12K TPM)**, default is sequential (`REVIEW_CONCURRENCY=1`) — firing 5 at once would burn ~13K input tokens in one second and trip the rate limit. On **Groq Dev Tier** or any paid tier, set `REVIEW_CONCURRENCY=5` in `.env` for full parallelism (5× faster).
 
@@ -119,10 +119,23 @@ Open a new PR in that repo. Within ~60s a comment appears with the full review.
 3. Filters to `opened`, `synchronize`, `reopened` actions only
 4. Dedupes by `head_sha` — won't re-review the same commit
 5. Queues review on background thread, returns 200 immediately (GitHub gives up at 10s)
-6. Background: fetch PR → 5 reviewers → aggregate → POST as PR comment
+6. Background: fetch PR → 5 reviewers (parallel) → consolidator (sequential) → POST inline review with one comment per finding
 
-### Optional frontend
-A Next.js dashboard to list past reviews + see status. Not built yet — manual + webhook flows work fine without it.
+## Frontend dashboard
+
+Live dashboard for triggering reviews + watching them run:
+
+```bash
+cd frontend
+npm install
+npm run dev -- --port 3001
+```
+
+Then open <http://localhost:3001>:
+- Home page lists all past reviews with status badges (queued / running / done / failed) and live polling
+- Trigger form lets you queue any GitHub PR URL by hand (no webhook needed)
+- Review detail page renders the consolidated findings with Conventional Comments badges, file:line locations, severity, and per-finding "flagged by:" attribution back to the original specialist(s)
+- Set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if the backend runs on a different host/port
 
 ## Stack
 - CrewAI 1.14 (5 agents, parallel kickoff)
