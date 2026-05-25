@@ -122,7 +122,9 @@ async def run_review_async(
     coros: list[Awaitable[ReviewerOutput]] = [wrapped(i, k) for i, k in enumerate(reviewers)]
     outputs = await asyncio.gather(*coros)
 
-    # Step 2: consolidator agent — runs sequentially after the 5 are done
+    # Step 2: consolidator agent — runs sequentially after the 5 are done.
+    # Uses Llama 3.1 8B (separate TPM bucket from 70B), so even if reviewers ran
+    # back-to-back the consolidator won't compete for the 70B's quota.
     consolidated_comments = None
     overall_summary = None
     if on_progress:
@@ -132,8 +134,12 @@ async def run_review_async(
         consolidated_comments = cons.findings
         overall_summary = cons.overall_summary
     except Exception as e:
-        # Consolidator failure isn't fatal — fall back to showing the raw 5-reviewer outputs
-        overall_summary = f"(consolidator failed: {type(e).__name__}: {e})"
+        # Consolidator failure isn't fatal — fall back to the raw 5-reviewer outputs.
+        # Truncate the error so it stays readable in the UI.
+        err_msg = str(e)
+        if len(err_msg) > 200:
+            err_msg = err_msg[:200] + "..."
+        overall_summary = f"(consolidator failed: {type(e).__name__}: {err_msg})"
     if on_progress:
         on_progress("__consolidator__", "done")
 

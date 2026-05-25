@@ -11,7 +11,7 @@ Goals:
 from crewai import Agent, Crew, Process, Task
 from pydantic import BaseModel
 
-from services.llms import main_llm
+from services.llms import lite_llm
 from services.models import ReviewComment, ReviewerOutput
 
 
@@ -33,7 +33,7 @@ def consolidator_agent() -> Agent:
             "'praise:' comments when the PR has genuinely good code, because real reviewers do this. "
             "You write a 2-3 sentence overall verdict at the top."
         ),
-        llm=main_llm(),
+        llm=lite_llm(),
         verbose=False,
     )
 
