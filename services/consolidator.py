@@ -21,6 +21,11 @@ class ConsolidatedOutput(BaseModel):
 
 
 def consolidator_agent() -> Agent:
+    # IMPORTANT: pass BOTH `llm` and `function_calling_llm` to the 8B model.
+    # CrewAI uses `function_calling_llm` for the internal structured-output converter
+    # that backs `output_pydantic`. If left unset it falls back to something that
+    # competes with the 70B reviewer bucket — hence we explicitly point both at 8B.
+    llm = lite_llm()
     return Agent(
         role="Review Consolidator",
         goal="Merge 5 reviewers' findings into one clean, prioritised, deduped list using Conventional Comments format",
@@ -33,7 +38,8 @@ def consolidator_agent() -> Agent:
             "'praise:' comments when the PR has genuinely good code, because real reviewers do this. "
             "You write a 2-3 sentence overall verdict at the top."
         ),
-        llm=lite_llm(),
+        llm=llm,
+        function_calling_llm=llm,
         verbose=False,
     )
 
@@ -52,7 +58,6 @@ Conventional Comments prefix guide (assign exactly one per finding):
 
 async def consolidate(reviewer_outputs: list[ReviewerOutput]) -> ConsolidatedOutput:
     """Run the consolidator agent on the 5 reviewers' outputs."""
-    # Flatten into a structured input the agent can reason over
     raw_blob_parts = []
     for r in reviewer_outputs:
         raw_blob_parts.append(f"\n## Reviewer: {r.reviewer}")
